@@ -1,0 +1,29 @@
+# The warehouse path is a variable so the same file works for `dbt` and for
+# `edr`, which runs dbt from inside its own package directory: a relative path
+# would resolve there and silently create a second, empty database. The Makefile
+# passes an absolute path; a bare `dbt build` still works from this directory.
+#
+#   dbt build --profiles-dir .
+#   make elementary
+dq_lab:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DQ_WAREHOUSE', 'warehouse.duckdb') }}"
+      threads: 4
+      settings:
+        # Keep date/timestamp arithmetic predictable across versions.
+        TimeZone: "UTC"
+
+# The Elementary CLI looks up a profile named `elementary` for its own metadata
+# connection; pointing it at the same database is the documented local setup.
+elementary:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DQ_WAREHOUSE', 'warehouse.duckdb') }}"
+      threads: 4
+      settings:
+        TimeZone: "UTC"

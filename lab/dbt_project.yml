@@ -1,0 +1,61 @@
+name: "dq_lab"
+version: "1.0.0"
+config-version: 2
+
+# Pinned to dbt Core 1.x deliberately: dbt v2 is now the default for new
+# installations, but the adapter ecosystem this lab depends on (dbt-duckdb,
+# dbt_expectations, elementary) is proven on Core 1.12. See docs/tooling.md.
+profile: "dq_lab"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  # Which published months the lab measures. Both pinned files are read
+  # together with union_by_name; `month` is derived per row from the filename.
+  # To measure one month only:
+  #   dbt build --vars '{trips_path: "data/raw/yellow_tripdata_2025-01.parquet"}'
+  trips_path: "data/raw/yellow_tripdata_*.parquet"
+  window_start: "2024-01-01"
+  window_end: "2025-02-01"
+  # A rule is a failure when its defect rate exceeds this. Registry rows may
+  # override per rule; the default is a deliberate teaching choice, not a fact.
+  default_max_rate: 0.01
+  # Overall score below this is a WARN even if every rule passed.
+  overall_target: 0.98
+
+models:
+  dq_lab:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table
+    quality:
+      +materialized: table
+
+# Note: the Elementary package is deliberately NOT given a custom schema.
+# `edr report` reads its metadata tables from the profile's schema, and a
+# `+schema: elementary` override puts them in `<schema>_elementary`, where the
+# CLI cannot find them. Keeping them in the default schema is the documented
+# local setup and the reason `make elementary` works on a fresh clone.
+
+seeds:
+  dq_lab:
+    +quote_columns: false
+    trip_rules:
+      +column_types:
+        rule_id: varchar
+        dimension: varchar
+        severity: varchar
+        denominator_kind: varchar
+        max_rate: double
+    labelled_trips:
+      +column_types:
+        is_defect: boolean

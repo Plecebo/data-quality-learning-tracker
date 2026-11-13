@@ -1,0 +1,16 @@
+# Pinned to the versions this lab was built and verified against.
+# dbt Core 1.x deliberately: dbt v2 is now the default for new installs, but the
+# adapter and package ecosystem below is proven on Core 1.12. See docs/tooling.md.
+dbt-core==1.12.7
+dbt-duckdb==1.11.1
+duckdb==2.0.0
+
+# dbt packages are resolved by packages.yml, not here:
+#   dbt_utils 1.4.1, dbt_expectations 0.10.4 (+ dbt_date 0.10.1), elementary 0.26.1
+elementary-data[duckdb]==0.26.1
+
+# Entity resolution. Splink 5 needs only duckdb + pyarrow + sqlglot at runtime;
+# pandas is included for convenience when exploring frames interactively.
+splink==5.0.0
+pyarrow>=18.0.0
+pandas>=2.2

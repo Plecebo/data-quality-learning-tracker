@@ -1,0 +1,18 @@
+# lab-local generated state
+.venv/
+warehouse.duckdb
+warehouse.duckdb.wal
+target/
+logs/
+dbt_packages/
+edr_target/
+
+# downloaded data (pinned + checksum-verified by scripts/fetch.py)
+data/raw/
+
+# generated fixtures (rebuilt by scripts and splink/plant_dupes.py)
+splink/data/zones_dupes.csv
+
+__pycache__/
+*.pyc
+package-lock.yml

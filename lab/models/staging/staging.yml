@@ -1,0 +1,152 @@
+version: 2
+
+models:
+
+  - name: stg_trips
+    description: >
+      One row per published yellow-taxi trip record, typed and renamed. The two
+      pinned months are read with union_by_name so that the 2025 addition of
+      cbd_congestion_fee appears as a null column in 2024 rather than as a
+      broken build.
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1000000
+            max_value: 8000000
+          config:
+            severity: warn
+      - dbt_expectations.expect_column_values_to_be_in_set:
+          arguments:
+            column_name: vendor_id
+            value_set: [1, 2, 6, 7]
+          config:
+            severity: warn
+    columns:
+      - name: trip_key
+        description: >
+          Constructed identifier: md5 of vendor, pickup, drop-off, both location
+          ids and total_amount. TLC publishes no trip id, so uniqueness is a
+          claim about this key, not about reality.
+        tests:
+          - not_null
+          - unique:
+              config:
+                severity: warn
+      - name: source_month
+        description: Publication month, derived from the parquet filename rather than from pickup_at.
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['2024-01', '2025-01']
+              config:
+                severity: warn
+      - name: pickup_at
+        description: Meter-on timestamp, local time (America/New_York) as published.
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: "'2007-01-01'"
+                max_value: "'2026-01-01'"
+              config:
+                severity: warn
+      - name: dropoff_at
+        description: Meter-off timestamp. Null in a small number of rows; a null has no duration.
+      - name: passenger_count
+        description: Driver-reported passenger count. Null on ~4.7% of 2024-01 rows and ~15.5% of 2025-01 rows.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 8
+              config:
+                severity: warn
+      - name: trip_distance
+        description: Elapsed trip distance in miles, as reported by the meter.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 500
+              config:
+                severity: warn
+      - name: ratecode_id
+        description: Final rate code. 1-6 are documented; 99 appears on one vendor and is not.
+      - name: store_and_fwd_flag
+        description: Y/N flag for store-and-forward. Two values by contract.
+        tests:
+          # row_condition matters: without it dbt_expectations counts NULL as
+          # outside the value set, and this test would report the 680k-row null
+          # cohort as a domain violation. Nulls belong to completeness.
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['Y', 'N']
+                row_condition: "store_and_fwd_flag is not null"
+              config:
+                severity: warn
+      - name: pu_location_id
+        description: Pickup taxi zone id. Foreign key to stg_zones.location_id.
+        tests:
+          - not_null
+      - name: do_location_id
+        description: Drop-off taxi zone id. 265 means "outside NYC" by definition of the lookup.
+      - name: payment_type
+        description: 1-6 documented. 0 appears on the 140k-row null cohort in 2024-01.
+      - name: fare_amount
+        description: Meter fare. Negative values exist and are mostly documented refunds.
+      - name: total_amount
+        description: Total charged. Does not always equal the sum of the components - see cns_total_reconciles.
+        tests:
+          - dbt_expectations.expect_column_mean_to_be_between:
+              arguments:
+                min_value: 5
+                max_value: 40
+              config:
+                severity: warn
+      - name: airport_fee
+        description: Airport pickup/drop-off fee. Populated from 2024 onwards.
+      - name: cbd_congestion_fee
+        description: Congestion pricing fee. Exists only from 2025-01; null for every 2024 row by schema, not by defect.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -1
+                max_value: 1
+              config:
+                severity: warn
+
+  - name: stg_zones
+    description: Taxi zone lookup, 265 rows. 264 = Unknown and 265 = N/A carry no geography.
+    columns:
+      - name: location_id
+        description: Primary key. 1 = Newark Airport (EWR), 264 = Unknown, 265 = Outside NYC.
+        tests:
+          - not_null
+          - unique
+      - name: borough
+        description: Borough name, or "N/A" for the two sentinel rows.
+      - name: zone
+        description: Zone name.
+      - name: service_zone
+        description: Service zone classification (Yellow Zone, Boro Zone, EWR, N/A).
+
+  - name: stg_labelled_trips
+    description: >
+      The planted-defect fixture, typed to the same contract as stg_trips.
+      19 of 40 rows carry a labelled defect; 3 clean rows are documented
+      refunds that a naive negative-fare rule flags. Used only to score rules.
+    columns:
+      - name: trip_key
+        description: Fixture key. Deliberately contains one duplicated key.
+        tests:
+          - not_null
+      - name: is_defect
+        description: Ground truth for the row.
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: [true, false]
+      - name: defect_class
+        description: Which planted defect class the row belongs to; empty for clean rows.

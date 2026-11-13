@@ -1,0 +1,96 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  no-data-gate:
+    # Everything that can be verified on a fresh clone without the 110 MB
+    # download: the registry, the fixture, the audit and the contract.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create environment
+        run: uv venv .venv --python 3.13
+
+      - name: Install pinned stack
+        run: uv pip install --python .venv/bin/python -r requirements.txt
+
+      - name: dbt deps
+        run: .venv/bin/dbt deps --profiles-dir .
+        working-directory: lab
+
+      - name: Parse the project
+        run: .venv/bin/dbt parse --profiles-dir .
+        working-directory: lab
+
+      - name: Fixture gate (build + rule audit + registry tests)
+        run: make check
+        working-directory: lab
+
+      - name: Contract validates against the ODCS schema
+        run: .venv/bin/python scripts/validate_contract.py
+        working-directory: lab
+
+      - name: Relative markdown links resolve
+        run: .venv/bin/python scripts/check_links.py
+
+      - name: Python files compile
+        run: .venv/bin/python -m compileall -q lab/scripts lab/splink scripts
+
+  full-build:
+    # The real measurement run. Slow (~110 MB download, 6.4M rows), so it runs
+    # on main only. It is the job that proves the numbers in the docs.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create environment
+        run: uv venv .venv --python 3.13
+
+      - name: Install pinned stack
+        run: uv pip install --python .venv/bin/python -r requirements.txt
+
+      - name: dbt deps
+        run: .venv/bin/dbt deps --profiles-dir .
+        working-directory: lab
+
+      - name: Fetch pinned data (checksums enforced)
+        run: make data
+        working-directory: lab
+
+      - name: Build and test
+        run: make build
+        working-directory: lab
+
+      - name: Print the scorecard
+        run: make scorecard
+        working-directory: lab
+
+      - name: Assert the documented baseline
+        # The numbers in docs/ and ledger.md are claims. If a rebuild moves them,
+        # the docs are wrong and the build should say so.
+        run: |
+          .venv/bin/python - <<'PY'
+          import duckdb
+          con = duckdb.connect("warehouse.duckdb", read_only=True)
+          rows = dict(con.execute("select month, status from dq_overall").fetchall())
+          assert rows == {"2024-01": "PASS", "2025-01": "WARN"}, rows
+          cert = con.execute("select bool_and(certificate_ok) from dq_overall").fetchone()[0]
+          assert cert is True, "certificate_ok must be true for both months"
+          noisy = con.execute(
+              "select count(*) from dq_rule_audit where verdict = 'noisy'").fetchone()[0]
+          assert noisy == 1, f"expected exactly one deliberately noisy rule, got {noisy}"
+          print("baseline holds:", rows)
+          PY
+        working-directory: lab

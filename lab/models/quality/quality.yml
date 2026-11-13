@@ -1,0 +1,95 @@
+version: 2
+
+models:
+
+  - name: dq_scorecard
+    description: One row per rule per month with numerator, denominator, defect rate and verdict.
+    columns:
+      - name: numerator
+        tests:
+          - not_null
+      - name: denominator
+        tests:
+          - not_null
+      - name: defect_rate
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: status
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['pass', 'warn', 'fail', 'not_applicable']
+
+  - name: dq_dimension_scorecard
+    description: Dimension rollup per month, with the worst rule named.
+    columns:
+      - name: score
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: rules_applied
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: dq_overall
+    description: >
+      The headline score with its guards: coverage, failed rule count, critical
+      failures, and certificate_ok. A score without coverage is not a
+      certificate.
+    columns:
+      - name: overall_score
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: coverage
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: status
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['PASS', 'WARN', 'FAIL']
+
+  - name: dq_rule_audit
+    description: Confusion matrix per rule against the labelled fixture, plus a verdict.
+    columns:
+      - name: precision
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: recall
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: verdict
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['ok', 'noisy', 'blind', 'never_fires']
+
+  - name: dq_class_coverage
+    description: One row per planted defect class; shows whether anything detects it.
+    columns:
+      - name: class_coverage
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1

@@ -1,0 +1,8 @@
+dimension,weight,rationale
+accuracy,0.10,"Consumers care about it most and it is the most expensive to measure: it needs a reference. Weighted low on purpose so that a proxy is not mistaken for the real thing."
+completeness,0.20,"Cheapest high-value dimension to measure, and the first thing a consumer notices. The 2025 regression from 4.7% to 15.5% nulls is the strongest single signal in the lab."
+conformity,0.20,"Domain, code-set and referential rules. High weight because a violation here breaks joins downstream, not just a report."
+consistency,0.20,"Arithmetic and cross-field agreement. High weight because it is the dimension most often reported as 'the data is wrong' by consumers."
+coverage,0.05,"Lowest weight: gaps in location coverage degrade an analysis but rarely break it. Raise it for any dataset whose purpose is geographic."
+timeliness,0.15,"Latency between event and availability. Weighted above coverage because a late dataset can be unusable regardless of how complete it is."
+uniqueness,0.10,"Entity-level duplication matters, but row-level uniqueness is usually a property of the key you chose. Weighted below the structural dimensions for that reason."

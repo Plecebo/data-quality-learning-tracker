@@ -1,0 +1,21 @@
+# practice environment
+lab/.venv/
+lab/data/raw/
+lab/out/
+lab/*.duckdb
+lab/*.duckdb.wal
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+
+# never commit credentials or local overrides
+.env
+*.local

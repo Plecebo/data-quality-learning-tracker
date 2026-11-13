@@ -1,0 +1,66 @@
+version: 2
+
+models:
+
+  - name: dim_zones
+    description: Taxi zone dimension, 265 rows including the two sentinel rows.
+    columns:
+      - name: location_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_trips
+    description: >
+      Consumer-facing trips table. This is where Elementary monitors are
+      attached, because this is the table a consumer actually queries: monitoring
+      the raw layer tells you about the vendor, monitoring the mart tells you
+      about the product.
+    config:
+      elementary:
+        timestamp_column: "pickup_at"
+    tests:
+      # Schema drift detection: the 2025 cbd_congestion_fee column is exactly
+      # the kind of change this catches. Run the lab twice with different
+      # months to see a change recorded.
+      - elementary.schema_changes:
+          config:
+            severity: warn
+      # Volume anomaly. Needs a training history before it can say anything.
+      # The pinned data sits in 2024-01 and 2025-01, so the window is widened to
+      # reach it and the bucket is monthly; with two observations against a
+      # minimum training set of 14, Elementary reports insufficient history
+      # rather than a false green. That is the tool telling the truth, and it is
+      # the point of week 6. See lab/docs/EXERCISES.md.
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: pickup_at
+            where_expression: "1 = 1"
+            anomaly_sensitivity: 3
+            anomaly_direction: both
+            min_training_set_size: 14
+            time_bucket:
+              period: month
+              count: 1
+            days_back: 1200
+            backfill_days: 2
+            seasonality: null
+            sensitivity: null
+            ignore_small_changes: null
+            fail_on_zero: null
+            detection_delay: null
+            anomaly_exclude_metrics: null
+            detection_period: null
+            training_period: null
+          config:
+            severity: warn
+    columns:
+      - name: trip_key
+        tests:
+          - not_null
+      - name: pickup_at
+        description: Timestamp used for freshness and volume monitoring.
+        tests:
+          - not_null
+      - name: implied_mph
+        description: Derived average speed; null where timestamps or distance make it undefined.

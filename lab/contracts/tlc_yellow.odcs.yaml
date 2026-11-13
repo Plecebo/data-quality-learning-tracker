@@ -1,0 +1,178 @@
+apiVersion: v3.2.0
+kind: DataContract
+id: urn:dq-lab:tlc-yellow-trips
+name: NYC TLC Yellow Taxi Trips (measurement contract)
+version: 1.0.0
+status: active
+domain: transport
+description:
+  purpose: >
+    Define what "usable" means for the yellow-taxi trip records this lab
+    measures, so that the rules in seeds/trip_rules.csv are a contract rather
+    than a collection of opinions.
+  usage: >
+    Demand and fare analysis at the trip grain. Not suitable for driver pay
+    reconciliation: the payment fields are vendor-supplied and the publisher
+    explicitly disclaims their accuracy.
+  limitations: >
+    Accuracy cannot be measured from this dataset alone. The publisher states
+    that trip data is supplied by technology providers and that TLC makes no
+    representations as to its accuracy. Any accuracy claim here is a proxy.
+tenant: dq-lab
+tags:
+  - public-data
+  - measurement-lab
+
+schema:
+  - name: fct_trips
+    logicalType: object
+    description: One row per published trip record, typed and joined to the taxi zone dimension.
+    properties:
+      - name: trip_key
+        logicalType: string
+        required: true
+        description: md5 of vendor, pickup, drop-off, both location ids and total_amount. Constructed, because TLC publishes no trip id.
+      - name: source_month
+        logicalType: string
+        required: true
+        description: Publication month, derived from the parquet filename rather than from pickup_at.
+      - name: vendor_id
+        logicalType: integer
+        required: true
+        description: Technology provider. 1 and 2 are documented; 6 and 7 appear in the data and are not.
+      - name: pickup_at
+        logicalType: timestamp
+        required: true
+        description: Meter-on timestamp, local time as published.
+      - name: dropoff_at
+        logicalType: timestamp
+        required: false
+        description: Meter-off timestamp. Null rows have no measurable duration.
+      - name: passenger_count
+        logicalType: integer
+        required: false
+        description: Driver-reported count. Null on 4.7% of 2024-01 and 15.5% of 2025-01.
+      - name: trip_distance
+        logicalType: number
+        required: true
+        description: Elapsed distance in miles.
+      - name: pu_location_id
+        logicalType: integer
+        required: true
+        description: Pickup zone id. Foreign key to the taxi zone lookup.
+      - name: do_location_id
+        logicalType: integer
+        required: true
+        description: Drop-off zone id. 265 means outside NYC by definition.
+      - name: payment_type
+        logicalType: integer
+        required: false
+        description: 1-6 documented; 0 appears on the null cohort.
+      - name: total_amount
+        logicalType: number
+        required: true
+        description: Total charged. Not always the sum of the components; see cns_total_reconciles.
+
+    # Quality lives on the schema object in ODCS v3.2.0, not at the contract root.
+    # Each entry carries the lab's rule_id in customProperties so that
+    # scripts/validate_contract.py can prove the agreement and the executable
+    # tests describe the same system.
+    quality:
+      - id: q-completeness-passenger
+        name: passenger_count completeness
+        dimension: completeness
+        type: sql
+        severity: warning
+        description: Defect rate for null passenger_count must stay at or below 5% per published month.
+        query: "SELECT COUNT(*) FROM ${table} WHERE ${column} IS NULL"
+        mustBe: 0
+        unit: rows
+        customProperties:
+          - property: rule_id
+            value: cmp_passenger_count_null
+          - property: threshold_max_rate
+            value: "0.05"
+
+      - id: q-conformity-vendor
+        name: vendor code set
+        dimension: conformity
+        type: sql
+        severity: warning
+        description: VendorID outside the documented set must surface on first appearance, not be absorbed by a threshold.
+        query: "SELECT COUNT(*) FROM ${table} WHERE ${column} NOT IN (1, 2)"
+        mustBe: 0
+        unit: rows
+        customProperties:
+          - property: rule_id
+            value: cfm_vendor_documented
+          - property: threshold_max_rate
+            value: "0.001"
+
+      - id: q-consistency-total
+        name: total_amount reconciles with its components
+        dimension: consistency
+        type: sql
+        severity: warning
+        description: >
+          Absolute difference between total_amount and the sum of components above
+          $2.51 is a defect. The tolerance absorbs the known vendor offset; it is a
+          stated judgement, not a fact.
+        query: "SELECT COUNT(*) FROM ${table} WHERE ABS(${column} - (fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge + COALESCE(congestion_surcharge, 0) + COALESCE(airport_fee, 0))) > 2.51"
+        mustBe: 0
+        unit: rows
+        customProperties:
+          - property: rule_id
+            value: cns_total_reconciles
+          - property: threshold_max_rate
+            value: "0.25"
+
+      - id: q-coverage-zone
+        name: location identifies a place
+        dimension: coverage
+        type: sql
+        severity: warning
+        description: Rows whose pickup zone is 264 (Unknown) or 265 (Outside NYC) are valid keys with no geography.
+        query: "SELECT COUNT(*) FROM ${table} WHERE ${column} IN (264, 265)"
+        mustBe: 0
+        unit: rows
+        customProperties:
+          - property: rule_id
+            value: cov_pickup_zone_usable
+          - property: threshold_max_rate
+            value: "0.02"
+
+slaProperties:
+  - id: sla-freshness
+    property: freshness
+    value: 60
+    unit: d
+    element: fct_trips.pickup_at
+    driver: regulatory
+    description: >
+      The publisher releases monthly files with roughly a two-month lag. This is
+      the only freshness commitment the data can support; a daily SLA would be
+      unmeetable and therefore meaningless.
+  - id: sla-availability
+    property: availability
+    value: 99.0
+    unit: "%"
+    element: fct_trips
+    driver: analytics
+    description: The pinned files must be retrievable and checksum-verified before a measurement run.
+
+team:
+  id: dq-lab
+  name: Data Quality Lab
+  members:
+    - username: larry
+      name: Larry Schwerzler
+      role: owner
+      description: Owns the definitions, the thresholds and the decision to change them.
+
+customProperties:
+  - property: dataset_grain
+    value: one row per published trip record
+  - property: suite_location
+    value: seeds/trip_rules.csv + macros/dq_rules.sql
+  - property: audit_location
+    value: models/quality/dq_rule_audit.sql
