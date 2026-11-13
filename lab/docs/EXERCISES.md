@@ -36,7 +36,7 @@ measure, and no SQL file can do that for you.
 ```bash
 make check     # 30 seconds, no download: proves the registry, the fixture and
                # the audit are coherent, and shows the rule that ships broken
-make build     # the full 6.4M-row build: 87 passes, 4 genuine warnings, 0 errors
+make build     # the full 6.4M-row build: 88 passes, 4 genuine warnings, 0 errors
 ```
 
 ## Then break something
