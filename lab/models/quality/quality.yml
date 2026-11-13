@@ -84,6 +84,25 @@ models:
               arguments:
                 value_set: ['ok', 'noisy', 'blind', 'never_fires']
 
+  - name: dq_rule_trend
+    description: >
+      Month-over-month movement per rule: previous rate, delta, and a verdict
+      (worse / better / stable / no_baseline). Excludes not_applicable rows so a
+      scoped rule cannot invent a baseline for a month in which it did not run.
+    columns:
+      - name: delta
+        description: defect_rate minus the same rule's previous applied month.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -1
+                max_value: 1
+      - name: trend
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ['worse', 'better', 'stable', 'no_baseline']
+
   - name: dq_class_coverage
     description: One row per planted defect class; shows whether anything detects it.
     columns:
