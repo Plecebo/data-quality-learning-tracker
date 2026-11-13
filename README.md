@@ -26,7 +26,7 @@ cd lab
 make setup        # uv venv + the pinned stack (dbt, dbt_expectations, Elementary, Splink)
 make check        # ~30s, no download: registry, fixture, rule audit, contract
 make data         # download the two pinned public files (~110 MB), sha256-verified
-make build        # dbt build over 2024-01 and 2025-01: 88 passes, 4 genuine warnings
+make build        # dbt build over 2024-01 and 2025-01: 92 passes, 4 genuine warnings
 make scorecard    # the numbers
 ```
 

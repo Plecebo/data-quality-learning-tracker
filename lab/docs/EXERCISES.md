@@ -20,7 +20,7 @@ measure, and no SQL file can do that for you.
 | 7 | Sampling and uncertainty | `python scripts/q.py sql/w07_sampling.sql`; `python splink/dedupe.py` | sample 5.0% vs truth 4.73%, Wilson interval 2.15–11.18%; Splink ceiling 0.692, P 0.969 / R 0.562 at 0.50 |
 | 8 | **Gate: instrument quality** (transfer test) | predict precision/recall, then measure | every gap > 20 points explained in writing |
 | 9 | Integrity vs coverage; uniqueness is key-dependent | `python scripts/q.py sql/w09_integrity_vs_coverage.sql` | 31,527 trips touch zone 264/265, 0 orphans; 1 duplicated pair on the constructed key in 2025-01 |
-| 10 | The incident | `python scripts/q.py sql/w10_incident.sql` | schema gains `cbd_congestion_fee`; null cohort 4.73% → 15.54%; vendor 7 appears |
+| 10 | The incident | `python scripts/q.py sql/w10_incident.sql`; then `select rule_id, month, previous_rate, defect_rate, trend from dq_rule_trend where trend <> 'stable'` | schema gains `cbd_congestion_fee`; null cohort 4.73% → 15.54%; vendor 7 appears; `cmp_passenger_count_null` and `cns_total_reconciles` both `worse` |
 | 11 | **Capstone** | contract + checks + scorecard + incident + remediation | the full artifact, audited by re-running its queries |
 | 12 | **Gate: capstone + retention** | `mastery-tests.md` §W12 | capstone ≥ 2 with one 3; 10-question retention quiz |
 
@@ -36,7 +36,7 @@ measure, and no SQL file can do that for you.
 ```bash
 make check     # 30 seconds, no download: proves the registry, the fixture and
                # the audit are coherent, and shows the rule that ships broken
-make build     # the full 6.4M-row build: 88 passes, 4 genuine warnings, 0 errors
+make build     # the full 6.4M-row build: 92 passes, 4 genuine warnings, 0 errors
 ```
 
 ## Then break something
