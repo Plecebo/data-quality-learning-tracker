@@ -10,6 +10,9 @@ jobs:
     # Everything that can be verified on a fresh clone without the 110 MB
     # download: the registry, the fixture, the audit and the contract.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab
     steps:
       - uses: actions/checkout@v4
 
@@ -24,31 +27,30 @@ jobs:
 
       - name: dbt deps
         run: .venv/bin/dbt deps --profiles-dir .
-        working-directory: lab
 
       - name: Parse the project
         run: .venv/bin/dbt parse --profiles-dir .
-        working-directory: lab
 
       - name: Fixture gate (build + rule audit + registry tests)
         run: make check
-        working-directory: lab
 
       - name: Contract validates against the ODCS schema
         run: .venv/bin/python scripts/validate_contract.py
-        working-directory: lab
 
       - name: Relative markdown links resolve
-        run: .venv/bin/python scripts/check_links.py
+        run: .venv/bin/python ../scripts/check_links.py
 
       - name: Python files compile
-        run: .venv/bin/python -m compileall -q lab/scripts lab/splink scripts
+        run: .venv/bin/python -m compileall -q scripts splink ../scripts
 
   full-build:
     # The real measurement run. Slow (~110 MB download, 6.4M rows), so it runs
     # on main only. It is the job that proves the numbers in the docs.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab
     steps:
       - uses: actions/checkout@v4
 
@@ -63,19 +65,15 @@ jobs:
 
       - name: dbt deps
         run: .venv/bin/dbt deps --profiles-dir .
-        working-directory: lab
 
       - name: Fetch pinned data (checksums enforced)
         run: make data
-        working-directory: lab
 
       - name: Build and test
         run: make build
-        working-directory: lab
 
       - name: Print the scorecard
         run: make scorecard
-        working-directory: lab
 
       - name: Assert the documented baseline
         # The numbers in docs/ and ledger.md are claims. If a rebuild moves them,
@@ -93,4 +91,3 @@ jobs:
           assert noisy == 1, f"expected exactly one deliberately noisy rule, got {noisy}"
           print("baseline holds:", rows)
           PY
-        working-directory: lab
